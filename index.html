@@ -1,0 +1,495 @@
+<title>Ideias em Voto</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+<!-- ============================================================
+     Ideias em Voto — mini app JUNITEC
+     Recolhe ideias de um brainstorm e permite votar nas melhores.
+     Dados em localStorage; sincroniza em tempo real entre
+     separadores do mesmo browser (evento "storage").
+     ============================================================ -->
+
+<style>
+  /* ---------- Identidade JUNITEC ---------- */
+  :root {
+    --azul: #175FAA;        /* fundo principal */
+    --claro: #F6F6F6;       /* cartões */
+    --texto: #3D4F6B;       /* texto em cartões */
+    --ciano: #74D1EF;       /* destaques e botões */
+    --ciano-texto: #0944A1; /* texto sobre ciano */
+    --texto-azul: #F6F6F6;  /* texto sobre azul */
+    --texto-suave: #E2EEFF; /* texto secundário sobre azul */
+    --filete: #4D85C2;      /* filetes sobre azul */
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--azul);
+    color: var(--texto-azul);
+    font-family: "Montserrat", "Segoe UI", sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .pagina { max-width: 760px; margin: 0 auto; padding-block: 24px 40px; }
+
+  /* ---------- Cabeçalho ---------- */
+  h1 {
+    font-size: 26px;
+    font-weight: 700;
+    margin: 0 0 10px;
+    color: var(--texto-azul);
+    text-wrap: balance;
+  }
+  .filete {
+    width: 120px; height: 6px;
+    background: var(--ciano);
+    border-radius: 3px;
+    margin-bottom: 14px;
+  }
+  .descricao { color: var(--texto-suave); line-height: 1.5; max-width: 60ch; margin: 0 0 4px; }
+  .nota-sync { color: var(--filete); font-size: 12px; margin: 0 0 24px; }
+
+  /* ---------- Painel de resumo ---------- */
+  .resumo {
+    display: flex; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .numero {
+    background: var(--claro);
+    color: var(--ciano-texto);
+    border-radius: 8px;
+    padding: 14px 18px;
+    min-width: 110px;
+    flex: 1 1 110px;
+  }
+  .numero .valor {
+    font-size: 30px; font-weight: 800; line-height: 1.1;
+    color: var(--ciano-texto);
+    background: var(--ciano);
+    border-radius: 6px;
+    display: inline-block;
+    padding: 2px 10px;
+    font-variant-numeric: tabular-nums;
+  }
+  .numero .rotulo { font-size: 12px; color: var(--texto); margin-top: 6px; }
+
+  /* ---------- Cartão de trabalho ---------- */
+  .cartao {
+    background: var(--claro);
+    color: var(--texto);
+    border-radius: 8px;
+    padding: 18px;
+    margin-bottom: 20px;
+  }
+  .cartao h2 { font-size: 15px; font-weight: 700; color: var(--azul); margin: 0 0 12px; }
+
+
+  /* ---------- Formulário ---------- */
+  .linha-form { display: flex; gap: 10px; flex-wrap: wrap; }
+  input[type="text"] {
+    flex: 1 1 220px;
+    min-width: 0;
+    border: 1px solid var(--filete);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font: inherit;
+    color: var(--texto);
+    background: #ffffff;
+  }
+  input[type="text"]:focus { outline: 2px solid var(--ciano); border-color: var(--ciano); }
+  input[type="text"]::placeholder { color: #8a97a8; }
+
+  button {
+    font: inherit;
+    font-weight: 600;
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 16px;
+    background: var(--ciano);
+    color: var(--ciano-texto);
+    cursor: pointer;
+  }
+  button:hover { filter: brightness(0.95); }
+  button:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+  button.secundario { background: #ffffff; color: var(--azul); border: 1px solid var(--filete); }
+  button.secundario:hover { background: var(--claro); filter: none; }
+  button.perigo-1 { background: transparent; color: #a33; border: 1px solid #d8b0b0; }
+  button.perigo-2 { background: #a33; color: #fff; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ---------- Lista de ideias ---------- */
+  .lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+
+  .ideia {
+    display: flex; gap: 14px; align-items: flex-start;
+    border: 1px solid var(--filete);
+    border-radius: 8px;
+    padding: 12px 14px;
+    background: #ffffff;
+  }
+  .ideia.mine { border-color: var(--ciano); border-width: 2px; }
+
+  .voto {
+    flex: 0 0 auto;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .voto .n {
+    font-size: 22px; font-weight: 800; color: var(--ciano-texto);
+    background: var(--ciano);
+    border-radius: 6px;
+    padding: 2px 10px;
+    font-variant-numeric: tabular-nums;
+  }
+  .voto button { padding: 5px 10px; font-size: 12px; }
+
+  .ideia .conteudo { flex: 1 1 auto; min-width: 0; }
+  .ideia .texto { font-weight: 600; color: var(--texto); margin: 0 0 4px; line-height: 1.4; }
+  .ideia .meta { font-size: 11px; color: #8a97a8; margin: 0; }
+  .ideia .acoes { flex: 0 0 auto; }
+
+  .posicao { color: var(--azul); font-weight: 800; font-size: 12px; margin-right: 6px; }
+  .etiqueta { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+              text-transform: uppercase; color: var(--azul); border: 1px solid var(--filete);
+              border-radius: 4px; padding: 1px 6px; margin-right: 6px; }
+
+  .voto-gasto { opacity: 0.55; }
+
+  /* ---------- Ações finais ---------- */
+  .acoes-fim { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  footer { color: var(--texto-suave); font-size: 12px; text-align: center; margin-top: 30px; }
+
+  /* ---------- Telemóvel ---------- */
+  @media (max-width: 640px) {
+    h1 { font-size: 22px; }
+    .cartao { padding: 14px; }
+    .numero .valor { font-size: 26px; }
+  }
+</style>
+
+<div class="pagina">
+  <header>
+    <h1>Ideias em Voto</h1>
+    <div class="filete"></div>
+    <p class="descricao">Junta as ideias de um brainstorm da equipa e vota nas melhores. Cada pessoa vota em até 3 ideias e vê a classificação a atualizar em tempo real.</p>
+    <p class="nota-sync">Os votos sincronizam automaticamente entre separadores abertos do mesmo browser (dados guardados neste dispositivo).</p>
+  </header>
+
+  <!-- Resumo: números em destaque -->
+  <section class="resumo" aria-label="Resumo">
+    <div class="numero"><span class="valor" id="num-ideias">0</span><div class="rotulo">ideias propostas</div></div>
+    <div class="numero"><span class="valor" id="num-votos">0</span><div class="rotulo">votos recebidos</div></div>
+    <div class="numero"><span class="valor" id="num-meus">0</span><div class="rotulo">votos usados (de 3)</div></div>
+  </section>
+
+  <!-- Formulário de nova ideia -->
+  <section class="cartao">
+    <h2>Propor uma ideia</h2>
+    <form id="form-ideia" class="linha-form">
+      <label for="campo-ideia" hidden>Texto da ideia</label>
+      <input type="text" id="campo-ideia" placeholder="Escreve a tua ideia…" maxlength="120" autocomplete="off">
+      <button type="submit">Propor ideia</button>
+    </form>
+  </section>
+
+  <!-- Lista de ideias, ordenada por votos -->
+  <section class="cartao">
+    <h2>Classificação</h2>
+    <ul class="lista" id="lista-ideias"></ul>
+  </section>
+
+  <!-- Levar o resultado para um relatório -->
+  <section class="acoes-fim">
+    <button id="botao-copiar">Copiar resultado</button>
+    <button id="botao-csv" class="secundario">Exportar CSV</button>
+    <button id="botao-reiniciar" class="perigo-1">Limpar tudo</button>
+  </section>
+
+  <footer>Feito pela JUNITEC</footer>
+</div>
+
+<script>
+"use strict";
+
+/* ---------- Estado ----------
+   Guarda tudo numa chave do localStorage.
+   votos de cada ideia = mapa { idPessoa: true }, para permitir
+   desfazer e contar quantos "votos eu" já usei.               */
+const CHAVE = "junitec-ideias-em-voto";
+const MAX_VOTOS = 3;
+
+// Identidade anónima e estável deste browser
+const MEU_ID = (function () {
+  try {
+    let id = localStorage.getItem(CHAVE + ":meu-id");
+    if (!id) {
+      id = "p_" + Math.random().toString(36).slice(2);
+      localStorage.setItem(CHAVE + ":meu-id", id);
+    }
+    return id;
+  } catch (e) {
+    return "p_sessao";
+  }
+})();
+
+const IDEIAS_EXEMPLO = [
+  { texto: "Sessões mensais de partilha entre áreas (exemplo)", autor: "Ana (exemplo)" },
+  { texto: "Intranet única com as respostas às perguntas mais comuns (exemplo)", autor: "Rui (exemplo)" },
+  { texto: "Programa de mentores para colegas novos (exemplo)", autor: "Marta (exemplo)" },
+  { texto: "Caixa de ideias digital com resposta em 15 dias (exemplo)", autor: "Tiago (exemplo)" }
+];
+
+function estadoDefault() {
+  return {
+    ideias: IDEIAS_EXEMPLO.map(function (ex, i) {
+      return { id: "i" + i, texto: ex.texto, autor: ex.autor, votos: {} };
+    })
+  };
+}
+
+function lerEstado() {
+  try {
+    const bruto = localStorage.getItem(CHAVE);
+    if (!bruto) return estadoDefault();
+    const dados = JSON.parse(bruto);
+    if (dados && Array.isArray(dados.ideias)) return dados;
+  } catch (e) { /* dados inválidos: usa o exemplo */ }
+  return estadoDefault();
+}
+
+function gravarEstado(estado) {
+  try {
+    localStorage.setItem(CHAVE, JSON.stringify(estado));
+  } catch (e) { /* storage bloqueado: continua só em memória */ }
+}
+
+// Fallback em memória quando o localStorage não está disponível
+let estado = lerEstado();
+
+/* ---------- Cálculo ---------- */
+function votosDaIdeia(ideia) { return Object.keys(ideia.votos).length; }
+function meusVotos() {
+  return estado.ideias.filter(function (i) { return i.votos[MEU_ID]; }).length;
+}
+function ideiasOrdenadas() {
+  // Mais votada primeiro; empate: ordem de criação
+  return estado.ideias
+    .map(function (i, idx) { return { ideia: i, idx: idx }; })
+    .sort(function (a, b) {
+      return votosDaIdeia(b.ideia) - votosDaIdeia(a.ideia) || a.idx - b.idx;
+    });
+}
+
+/* ---------- Ações ---------- */
+function proporIdeia(texto) {
+  texto = texto.trim();
+  if (!texto) return;
+  estado.ideias.push({
+    id: "i" + Date.now() + Math.random().toString(36).slice(2),
+    texto: texto, autor: "Eu", votos: {}
+  });
+  gravarEstado(estado);
+  render();
+}
+
+function votar(id) {
+  const ideia = estado.ideias.find(function (i) { return i.id === id; });
+  if (!ideia) return;
+  if (ideia.votos[MEU_ID]) {
+    delete ideia.votos[MEU_ID]; // desfazer o voto
+  } else if (meusVotos() >= MAX_VOTOS) {
+    return; // limite de 3 votos por pessoa
+  } else {
+    ideia.votos[MEU_ID] = true;
+  }
+  gravarEstado(estado);
+  render();
+}
+
+function removerIdeia(id) {
+  estado.ideias = estado.ideias.filter(function (i) { return i.id !== id; });
+  gravarEstado(estado);
+  render();
+}
+
+function copiarResultado() {
+  const linhas = ideiasOrdenadas().map(function (p, idx) {
+    return (idx + 1) + ". " + p.ideia.texto + " — " + votosDaIdeia(p.ideia) + " voto(s)";
+  });
+  const texto = "Ideias em Voto — resultado:\n" + linhas.join("\n");
+  navigator.clipboard.writeText(texto)
+    .then(function () { flashBotao("botao-copiar", "Copiado!"); })
+    .catch(function () { flashBotao("botao-copiar", "Copia manual: F12 Console"); });
+}
+
+function exportarCSV() {
+  const linhas = ["posicao;ideia;votos"]
+    .concat(ideiasOrdenadas().map(function (p, idx) {
+      return (idx + 1) + ";" + p.ideia.texto.replace(/;/g, ",") + ";" + votosDaIdeia(p.ideia);
+    }));
+  const blob = new Blob(["﻿" + linhas.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "ideias-em-voto.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function reiniciar() {
+  // Confirmação em duas etapas, sem diálogos do browser
+  const b = document.getElementById("botao-reiniciar");
+  if (b.dataset.confirmado !== "sim") {
+    b.dataset.confirmado = "sim";
+    b.textContent = "Tens a certeza? Clica de novo";
+    b.className = "perigo-2";
+    setTimeout(function () {
+      b.dataset.confirmado = "";
+      b.textContent = "Limpar tudo";
+      b.className = "perigo-1";
+    }, 4000);
+    return;
+  }
+  b.dataset.confirmado = "";
+  b.textContent = "Limpar tudo";
+  b.className = "perigo-1";
+  estado = estadoDefault();
+  gravarEstado(estado);
+  render();
+}
+
+/* ---------- Interface ---------- */
+function flashBotao(id, texto) {
+  const b = document.getElementById(id);
+  const original = b.textContent;
+  b.textContent = texto;
+  setTimeout(function () { b.textContent = original; }, 1800);
+}
+
+function render() {
+  // Resumo
+  document.getElementById("num-ideias").textContent = estado.ideias.length;
+  document.getElementById("num-votos").textContent = estado.ideias.reduce(function (s, i) { return s + votosDaIdeia(i); }, 0);
+  document.getElementById("num-meus").textContent = meusVotos();
+
+  // Lista
+  const lista = document.getElementById("lista-ideias");
+  lista.textContent = "";
+
+  if (estado.ideias.length === 0) {
+    const li = document.createElement("li");
+    li.className = "ideia";
+    li.textContent = "Ainda não há ideias. Propõe a primeira acima!";
+    lista.appendChild(li);
+    return;
+  }
+
+  const ordenadas = ideiasOrdenadas();
+  const maxVotos = votosDaIdeia(ordenadas[0].ideia) || 1;
+
+  ordenadas.forEach(function (par, pos) {
+    const ideia = par.ideia;
+    const n = votosDaIdeia(ideia);
+    const votedoMeu = !!ideia.votos[MEU_ID];
+
+    const li = document.createElement("li");
+    li.className = "ideia" + (votedoMeu ? " mine" : "");
+
+    // Zona de voto
+    const voto = document.createElement("div");
+    voto.className = "voto";
+    const num = document.createElement("span");
+    num.className = "n";
+    num.textContent = String(n);
+    num.title = n === maxVotos ? "Ideia mais votada" : "Votos";
+    const botaoV = document.createElement("button");
+    botaoV.type = "button";
+    botaoV.textContent = votedoMeu ? "Retirar voto" : "Votar";
+    botaoV.disabled = !votedoMeu && meusVotos() >= MAX_VOTOS;
+    botaoV.addEventListener("click", function () { votar(ideia.id); });
+    voto.appendChild(num);
+    voto.appendChild(botaoV);
+    li.appendChild(voto);
+
+    // Conteúdo
+    const conteudo = document.createElement("div");
+    conteudo.className = "conteudo";
+    const p = document.createElement("p");
+    p.className = "texto";
+    const marcador = document.createElement("span");
+    marcador.className = "posicao";
+    marcador.textContent = "#" + (pos + 1);
+    p.appendChild(marcador);
+    if (pos === 0 && n > 0) {
+      const tag = document.createElement("span");
+      tag.className = "etiqueta";
+      tag.textContent = "Líder";
+      p.appendChild(tag);
+    }
+    p.appendChild(document.createTextNode(ideia.texto));
+    const meta = document.createElement("p");
+    meta.className = "meta";
+    meta.textContent = "Proposto por " + ideia.autor;
+    conteudo.appendChild(p);
+    conteudo.appendChild(meta);
+    li.appendChild(conteudo);
+
+    // Ações
+    const acoes = document.createElement("div");
+    acoes.className = "acoes";
+    const botaoR = document.createElement("button");
+    botaoR.type = "button";
+    botaoR.className = "perigo-1";
+    botaoR.textContent = "✕";
+    botaoR.title = "Remover ideia";
+    botaoR.setAttribute("aria-label", "Remover ideia");
+    botaoR.style.padding = "5px 10px";
+    botaoR.addEventListener("click", function () {
+      if (botaoR.dataset.confirmado !== "sim") {
+        botaoR.dataset.confirmado = "sim";
+        botaoR.textContent = "Remover?";
+        setTimeout(function () { botaoR.dataset.confirmado = ""; botaoR.textContent = "✕"; }, 3000);
+        return;
+      }
+      removerIdeia(ideia.id);
+    });
+    acoes.appendChild(botaoR);
+    li.appendChild(acoes);
+
+    lista.appendChild(li);
+  });
+}
+
+/* ---------- Tempo real ----------
+   O evento "storage" dispara nos outros separadores quando
+   um separador grava no localStorage. Re-renderiza e a
+   classificação fica igual em todos.                      */
+window.addEventListener("storage", function (e) {
+  if (e.key !== CHAVE) return;
+  estado = lerEstado();
+  render();
+});
+
+/* ---------- Arranque ---------- */
+document.getElementById("form-ideia").addEventListener("submit", function (e) {
+  e.preventDefault();
+  const campo = document.getElementById("campo-ideia");
+  proporIdeia(campo.value);
+  campo.value = "";
+  campo.focus();
+});
+document.getElementById("botao-copiar").addEventListener("click", copiarResultado);
+document.getElementById("botao-csv").addEventListener("click", exportarCSV);
+document.getElementById("botao-reiniciar").addEventListener("click", reiniciar);
+
+render();
+</script>
